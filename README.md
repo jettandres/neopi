@@ -21,13 +21,31 @@ Neopi lets you:
 
 ## Installation
 
-With a plugin manager, point Neovim at this repository and optionally call setup:
+### lazy.nvim
+
+After pushing this repository to GitHub, users can install it with [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
-require("neopi").setup()
+{
+  "jettandres/neopi",
+  config = function()
+    require("neopi").setup()
+  end,
+}
 ```
 
-The plugin also defines `:Pi` automatically when loaded.
+For local development, you can point lazy.nvim at a local checkout:
+
+```lua
+{
+  dir = "/path/to/neopi",
+  config = function()
+    require("neopi").setup()
+  end,
+}
+```
+
+The plugin also defines `:Pi` automatically when loaded, so calling `setup()` is optional unless you want to override defaults.
 
 ## Requirements
 
@@ -124,7 +142,7 @@ Neopi builds a structured prompt before starting Pi.
 
 Example generated prompt:
 
-```text
+````text
 User request:
 make this safer and add input validation
 
@@ -141,8 +159,7 @@ local function greet(name)
   print("hello " .. name)
 end
 ```
-```
-```
+````
 
 This keeps the user's prompt short while still giving Pi enough context to act usefully.
 
@@ -178,6 +195,7 @@ require("neopi").setup({
   tmux = {
     right_pane_width = 40,
     focus_back_to_neovim = true,
+    prompt_delay_ms = 1000,
   },
   prompt = {
     include_file_path = true,

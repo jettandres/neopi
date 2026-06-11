@@ -7,6 +7,7 @@ local defaults = {
   tmux = {
     right_pane_width = 40,
     focus_back_to_neovim = true,
+    prompt_delay_ms = 1000,
   },
   prompt = {
     include_file_path = true,
