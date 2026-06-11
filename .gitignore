@@ -1,0 +1,21 @@
+# Neovim/Vim
+*.swp
+*.swo
+*.swn
+Session.vim
+.view/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Logs and temporary files
+*.log
+.DS_Store
+.tmp/
+tmp/
+
+# Lua tooling caches
+.luarocks/
+.luacheckcache

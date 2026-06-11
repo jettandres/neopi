@@ -19,6 +19,16 @@ Neopi lets you:
 - switch to the Pi pane whenever you want visibility or follow-up conversation
 - launch multiple Pi tasks in parallel tmux panes
 
+## Installation
+
+With a plugin manager, point Neovim at this repository and optionally call setup:
+
+```lua
+require("neopi").setup()
+```
+
+The plugin also defines `:Pi` automatically when loaded.
+
 ## Requirements
 
 Neopi assumes the following environment:
@@ -158,7 +168,7 @@ end
 
 This is nice to have, but not required for the initial version.
 
-## Configuration idea
+## Configuration
 
 Potential setup:
 
@@ -166,7 +176,7 @@ Potential setup:
 require("neopi").setup({
   pi_command = "pi",
   tmux = {
-    right_pane_width = "40%",
+    right_pane_width = 40,
     focus_back_to_neovim = true,
   },
   prompt = {
@@ -175,7 +185,7 @@ require("neopi").setup({
     include_line_range = true,
     include_cwd = true,
     include_git_root = true,
-  },},{
+  },
   indicators = {
     enabled = false,
   },
