@@ -54,9 +54,13 @@ Neopi assumes the following environment:
 - Neovim
 - tmux
 - Pi coding agent installed and available as `pi`
-- you are already inside a tmux session
+- you are already inside a tmux session for the default tmux backend
 
-Neopi is intentionally tmux-first. It does not try to manage terminal windows outside tmux.
+Optional for headless sessions:
+
+- `acpx` installed and available as `acpx`
+
+Neopi defaults to the tmux backend. The optional acpx backend is for headless, programmatic Pi sessions.
 
 ## Example workflow
 
@@ -163,27 +167,60 @@ end
 
 This keeps the user's prompt short while still giving Pi enough context to act usefully.
 
-## Interactive-first design
+## Backends
 
-Neopi's default mode is interactive.
+### tmux backend
 
-The plugin should launch normal Pi sessions inside tmux panes instead of running Pi as a hidden/headless command. This keeps the agent visible and gives you a place to continue the conversation after the initial prompt.
+Neopi's default backend is interactive tmux.
 
-A future version may support an optional headless mode for workflows where the user wants Neopi to run Pi in the background and collect output programmatically. That is intentionally not part of the initial design.
+The plugin launches normal Pi sessions inside tmux panes instead of running Pi as a hidden/headless command. This keeps the agent visible and gives you a place to continue the conversation after the initial prompt.
 
-## Optional editor feedback
-
-A future enhancement may show a lightweight progress indicator in Neovim while a Pi task is running.
-
-For example, after sending a visual selection, Neopi could display a virtual text marker near the selected block:
-
-```text
-local function greet(name)        ⠋ Pi running...
-  print("hello " .. name)
-end
+```lua
+require("neopi").setup({
+  backend = "tmux",
+})
 ```
 
-This is nice to have, but not required for the initial version.
+### acpx backend
+
+Neopi also has an experimental acpx backend for headless Pi sessions.
+
+Instead of opening an interactive tmux pane, Neopi creates an acpx session and sends the generated prompt to Pi through acpx. This is better for future progress indicators, completion tracking, cancellation, and structured output, but follow-up happens through Neopi/acpx rather than by typing directly into a visible Pi pane.
+
+```lua
+require("neopi").setup({
+  backend = "acpx",
+  acpx = {
+    command = "acpx",
+    agent = "pi",
+    format = "text",
+    permissions = "approve-all",
+    refresh_buffers_on_done = true,
+  },
+})
+```
+
+The acpx backend is experimental and not the default.
+
+## Editor feedback
+
+Neopi can show lightweight inline status using Neovim virtual text.
+
+For the tmux backend, the indicator tracks prompt delivery:
+
+```text
+local function greet(name)        ⠋ Sending to Pi...
+local function greet(name)        ✓ Sent to Pi pane %12
+```
+
+For the acpx backend, the indicator can track the headless job lifecycle:
+
+```text
+local function greet(name)        ⠋ Pi running via acpx...
+local function greet(name)        ✓ Pi done neopi-123
+```
+
+This distinction matters because interactive Pi panes remain open for follow-up conversation, so Neopi cannot reliably know when the agent is truly "done" in tmux mode.
 
 ## Configuration
 
@@ -191,6 +228,7 @@ Potential setup:
 
 ```lua
 require("neopi").setup({
+  backend = "tmux",
   pi_command = "pi",
   tmux = {
     right_pane_width = 40,
@@ -204,8 +242,20 @@ require("neopi").setup({
     include_cwd = true,
     include_git_root = true,
   },
+  acpx = {
+    command = "acpx",
+    agent = "pi",
+    format = "text",
+    permissions = "approve-all",
+    session = nil,
+    refresh_buffers_on_done = true,
+  },
   indicators = {
-    enabled = false,
+    enabled = true,
+    spinner = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" },
+    interval_ms = 120,
+    success_ttl_ms = 5000,
+    error_ttl_ms = 8000,
   },
 })
 ```
@@ -216,7 +266,7 @@ The first version should focus on:
 
 - defining `:Pi {prompt}`
 - supporting visual selections
-- requiring an active tmux session
+- requiring an active tmux session for the default tmux backend
 - creating the right-side Pi pane on first use
 - creating additional right-side horizontal panes on later uses
 - launching visible, interactive Pi sessions
@@ -229,8 +279,8 @@ Out of scope for the first version:
 - parsing Pi output
 - managing Pi sessions from Neovim
 - non-tmux terminal support
-- progress indicators
-- headless/background Pi execution
+- full headless result rendering in Neovim
+- acpx session management commands such as history, status, cancel, and follow-up
 
 ## Project status
 

@@ -1,8 +1,9 @@
 local M = {}
 
-local tmux = require("neopi.tmux")
+local indicators = require("neopi.indicators")
 
 local defaults = {
+  backend = "tmux",
   pi_command = "pi",
   tmux = {
     right_pane_width = 40,
@@ -15,6 +16,21 @@ local defaults = {
     include_line_range = true,
     include_cwd = true,
     include_git_root = true,
+  },
+  acpx = {
+    command = "acpx",
+    agent = "pi",
+    format = "text",
+    permissions = "approve-all",
+    session = nil,
+    refresh_buffers_on_done = true,
+  },
+  indicators = {
+    enabled = true,
+    spinner = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" },
+    interval_ms = 120,
+    success_ttl_ms = 5000,
+    error_ttl_ms = 8000,
   },
 }
 
@@ -52,6 +68,41 @@ local function get_selected_code(opts)
   end
 
   return opts.line1, opts.line2, vim.api.nvim_buf_get_lines(0, opts.line1 - 1, opts.line2, false)
+end
+
+local function indicator_line(opts)
+  if opts and opts.line1 and opts.range and opts.range > 0 then
+    return opts.line1 - 1
+  end
+
+  return vim.api.nvim_win_get_cursor(0)[1] - 1
+end
+
+local function start_indicator(opts, message)
+  local cfg = M.config.indicators or {}
+  if cfg.enabled == false then
+    return nil
+  end
+
+  return indicators.start({
+    bufnr = vim.api.nvim_get_current_buf(),
+    line = indicator_line(opts),
+    spinner = cfg.spinner,
+    interval_ms = cfg.interval_ms,
+    message = message,
+  })
+end
+
+local function backend_module(name)
+  if name == "tmux" then
+    return require("neopi.backends.tmux")
+  end
+
+  if name == "acpx" then
+    return require("neopi.backends.acpx")
+  end
+
+  return nil, "Unknown Neopi backend: " .. tostring(name)
 end
 
 local function build_prompt(user_prompt, opts)
@@ -106,21 +157,76 @@ end
 function M.pi(opts)
   opts = opts or {}
 
-  local ok, err = tmux.ensure_inside_tmux()
-  if not ok then
-    vim.notify(err, vim.log.levels.ERROR)
+  local backend_name = M.config.backend or "tmux"
+  local backend, backend_err = backend_module(backend_name)
+  if not backend then
+    vim.notify(backend_err, vim.log.levels.ERROR)
     return
   end
 
   local prompt = build_prompt(opts.args or "", opts)
-  local pane_id, pane_err = tmux.open_pi_pane(prompt, M.config)
 
-  if not pane_id then
-    vim.notify(pane_err or "Failed to open Pi tmux pane", vim.log.levels.ERROR)
+  if backend_name == "tmux" then
+    local ok, err = backend.ensure_inside_tmux()
+    if not ok then
+      vim.notify(err, vim.log.levels.ERROR)
+      return
+    end
+
+    local indicator = start_indicator(opts, "Sending to Pi...")
+    local pane_id, pane_err = backend.open_pi_pane(prompt, M.config)
+    if not pane_id then
+      if indicator then
+        indicator:done("✗ Failed to send to Pi", "DiagnosticError", M.config.indicators.error_ttl_ms)
+      end
+      vim.notify(pane_err or "Failed to open Pi tmux pane", vim.log.levels.ERROR)
+      return
+    end
+
+    if indicator then
+      indicator:done("✓ Sent to Pi pane " .. pane_id, "DiagnosticOk", M.config.indicators.success_ttl_ms)
+    end
+    vim.notify("Sent prompt to Pi pane " .. pane_id, vim.log.levels.INFO)
     return
   end
 
-  vim.notify("Sent prompt to Pi pane " .. pane_id, vim.log.levels.INFO)
+  if backend_name == "acpx" then
+    local ok, err = backend.ensure_available(M.config)
+    if not ok then
+      vim.notify(err, vim.log.levels.ERROR)
+      return
+    end
+
+    local indicator = start_indicator(opts, "Pi running via acpx...")
+    local session, session_err = backend.send(prompt, M.config, {
+      on_done = function(result)
+        if M.config.acpx.refresh_buffers_on_done ~= false then
+          vim.schedule(function()
+            vim.cmd("silent! checktime")
+          end)
+        end
+
+        if indicator then
+          indicator:done("✓ Pi done " .. result.id, "DiagnosticOk", M.config.indicators.success_ttl_ms)
+        end
+      end,
+      on_error = function(result)
+        if indicator then
+          indicator:done("✗ Pi failed " .. result.id, "DiagnosticError", M.config.indicators.error_ttl_ms)
+        end
+      end,
+    })
+    if not session then
+      if indicator then
+        indicator:done("✗ Failed to start Pi", "DiagnosticError", M.config.indicators.error_ttl_ms)
+      end
+      vim.notify(session_err or "Failed to start acpx session", vim.log.levels.ERROR)
+      return
+    end
+
+    vim.notify("Started Pi acpx session " .. session.id, vim.log.levels.INFO)
+    return
+  end
 end
 
 function M.setup(config)
@@ -132,7 +238,7 @@ function M.setup(config)
   end, {
     nargs = "*",
     range = true,
-    desc = "Send selection and prompt to Pi in a tmux pane",
+    desc = "Send selection and prompt to Pi",
   })
 end
 
