@@ -4,7 +4,7 @@ local indicators = require("neopi.indicators")
 local notify = require("neopi.notify")
 
 local defaults = {
-  backend = "tmux",
+  backend = "acpx",
   pi_command = "pi",
   tmux = {
     right_pane_width = 40,
