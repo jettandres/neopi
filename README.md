@@ -6,6 +6,8 @@ The goal is to keep Neovim as your main coding surface while Pi works asynchrono
 
 > Status: early prototype
 
+![Neopi demo](demos/neopi.gif)
+
 ## Why Neopi?
 
 When coding in Neovim, you often want to ask an agent to inspect, edit, explain, or refactor a specific piece of code without leaving your editor.

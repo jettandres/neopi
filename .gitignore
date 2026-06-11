@@ -19,3 +19,8 @@ tmp/
 # Lua tooling caches
 .luarocks/
 .luacheckcache
+
+# Generated README demo source files
+# Keep only the rendered GIF in git.
+demos/*
+!demos/neopi.gif
