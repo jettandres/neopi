@@ -31,6 +31,12 @@ local defaults = {
     interval_ms = 120,
     success_ttl_ms = 5000,
     error_ttl_ms = 8000,
+    number_highlight = true,
+    highlights = {
+      running = "NeopiRunning",
+      success = "NeopiSuccess",
+      error = "NeopiError",
+    },
   },
 }
 
@@ -70,12 +76,13 @@ local function get_selected_code(opts)
   return opts.line1, opts.line2, vim.api.nvim_buf_get_lines(0, opts.line1 - 1, opts.line2, false)
 end
 
-local function indicator_line(opts)
-  if opts and opts.line1 and opts.range and opts.range > 0 then
-    return opts.line1 - 1
+local function indicator_range(opts)
+  if opts and opts.line1 and opts.line2 and opts.range and opts.range > 0 then
+    return opts.line1 - 1, opts.line2 - 1
   end
 
-  return vim.api.nvim_win_get_cursor(0)[1] - 1
+  local line = vim.api.nvim_win_get_cursor(0)[1] - 1
+  return line, line
 end
 
 local function start_indicator(opts, message)
@@ -84,12 +91,18 @@ local function start_indicator(opts, message)
     return nil
   end
 
+  local start_line, end_line = indicator_range(opts)
+
   return indicators.start({
     bufnr = vim.api.nvim_get_current_buf(),
-    line = indicator_line(opts),
+    line = start_line,
+    start_line = start_line,
+    end_line = end_line,
     spinner = cfg.spinner,
     interval_ms = cfg.interval_ms,
     message = message,
+    number_highlight = cfg.number_highlight,
+    highlights = cfg.highlights,
   })
 end
 
@@ -177,14 +190,14 @@ function M.pi(opts)
     local pane_id, pane_err = backend.open_pi_pane(prompt, M.config)
     if not pane_id then
       if indicator then
-        indicator:done("✗ Failed to send to Pi", "DiagnosticError", M.config.indicators.error_ttl_ms)
+        indicator:done("✗ Failed to send to Pi", "DiagnosticError", M.config.indicators.error_ttl_ms, M.config.indicators.highlights.error)
       end
       vim.notify(pane_err or "Failed to open Pi tmux pane", vim.log.levels.ERROR)
       return
     end
 
     if indicator then
-      indicator:done("✓ Sent to Pi pane " .. pane_id, "DiagnosticOk", M.config.indicators.success_ttl_ms)
+      indicator:done("✓ Sent to Pi pane " .. pane_id, "DiagnosticOk", M.config.indicators.success_ttl_ms, M.config.indicators.highlights.success)
     end
     vim.notify("Sent prompt to Pi pane " .. pane_id, vim.log.levels.INFO)
     return
@@ -207,18 +220,18 @@ function M.pi(opts)
         end
 
         if indicator then
-          indicator:done("✓ Pi done " .. result.id, "DiagnosticOk", M.config.indicators.success_ttl_ms)
+          indicator:done("✓ Pi done " .. result.id, "DiagnosticOk", M.config.indicators.success_ttl_ms, M.config.indicators.highlights.success)
         end
       end,
       on_error = function(result)
         if indicator then
-          indicator:done("✗ Pi failed " .. result.id, "DiagnosticError", M.config.indicators.error_ttl_ms)
+          indicator:done("✗ Pi failed " .. result.id, "DiagnosticError", M.config.indicators.error_ttl_ms, M.config.indicators.highlights.error)
         end
       end,
     })
     if not session then
       if indicator then
-        indicator:done("✗ Failed to start Pi", "DiagnosticError", M.config.indicators.error_ttl_ms)
+        indicator:done("✗ Failed to start Pi", "DiagnosticError", M.config.indicators.error_ttl_ms, M.config.indicators.highlights.error)
       end
       vim.notify(session_err or "Failed to start acpx session", vim.log.levels.ERROR)
       return
@@ -231,6 +244,7 @@ end
 
 function M.setup(config)
   merge_config(config)
+  indicators.setup_highlights()
 
   pcall(vim.api.nvim_del_user_command, "Pi")
   vim.api.nvim_create_user_command("Pi", function(opts)

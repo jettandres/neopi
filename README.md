@@ -204,7 +204,9 @@ The acpx backend is experimental and not the default.
 
 ## Editor feedback
 
-Neopi can show lightweight inline status using Neovim virtual text.
+Neopi can show lightweight inline status using Neovim virtual text and line-number highlighting.
+
+While a task is active, the selected range's line numbers are highlighted so it is clear which block Pi is working on.
 
 For the tmux backend, the indicator tracks prompt delivery:
 
@@ -256,6 +258,12 @@ require("neopi").setup({
     interval_ms = 120,
     success_ttl_ms = 5000,
     error_ttl_ms = 8000,
+    number_highlight = true,
+    highlights = {
+      running = "NeopiRunning",
+      success = "NeopiSuccess",
+      error = "NeopiError",
+    },
   },
 })
 ```
