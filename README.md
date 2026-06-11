@@ -236,6 +236,10 @@ local function greet(name)        ⠋ Pi running via acpx...
 local function greet(name)        ✓ Pi done neopi-123
 ```
 
+After a new acpx session is created for a selected range, Neopi keeps a subtle line-number highlight on that range. If you later select an overlapping range and run `:Pi <follow-up>`, Neopi resumes the existing acpx session automatically.
+
+This paragraph-to-session mapping is currently local to the running Neovim instance. If you restart Neovim, the visual mapping is lost, but the underlying acpx sessions still exist.
+
 This distinction matters because interactive Pi panes remain open for follow-up conversation, so Neopi cannot reliably know when the agent is truly "done" in tmux mode.
 
 When `mini.notify` is available, acpx sessions also get a persistent notification while running. This is useful when jumping between files because the running session remains visible outside the original buffer.
@@ -267,6 +271,7 @@ require("neopi").setup({
     permissions = "approve-all",
     session = nil,
     refresh_buffers_on_done = true,
+    resume_by_region = true,
   },
   notifications = {
     enabled = true,
@@ -285,6 +290,7 @@ require("neopi").setup({
       running = "NeopiRunning",
       success = "NeopiSuccess",
       error = "NeopiError",
+      session = "NeopiSession",
     },
   },
 })
@@ -299,6 +305,7 @@ The first version should focus on:
 - supporting visual selections
 - sending selected code plus minimal file/project context to Pi
 - showing inline status and refreshing buffers after acpx completion
+- attaching acpx sessions to selected regions for local follow-up prompts
 - preserving the tmux backend for interactive Pi panes
 
 Out of scope for the first version:

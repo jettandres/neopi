@@ -50,16 +50,20 @@ function M.ensure_available(config)
   return true, nil
 end
 
-function M.send(prompt, config, callbacks)
+function M.send(prompt, config, callbacks, opts)
   callbacks = callbacks or {}
+  opts = opts or {}
   local acpx_cfg = config.acpx or {}
   local command = acpx_cfg.command or "acpx"
   local agent = acpx_cfg.agent or "pi"
   local format = acpx_cfg.format or "text"
   local permissions = acpx_cfg.permissions or "approve-all"
   local cwd = vim.fn.getcwd()
-  local session = acpx_cfg.session or new_session_name()
-  local create_session = acpx_cfg.session == nil
+  local session = opts.session or acpx_cfg.session or new_session_name()
+  local create_session = opts.create_session
+  if create_session == nil then
+    create_session = opts.session == nil and acpx_cfg.session == nil
+  end
 
   local prompt_file, err = write_prompt_file(prompt)
   if not prompt_file then

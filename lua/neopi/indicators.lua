@@ -14,6 +14,7 @@ function M.setup_highlights()
   vim.api.nvim_set_hl(0, "NeopiRunning", { fg = "#e0af68", default = true })
   vim.api.nvim_set_hl(0, "NeopiSuccess", { fg = "#9ece6a", default = true })
   vim.api.nvim_set_hl(0, "NeopiError", { fg = "#f7768e", default = true })
+  vim.api.nvim_set_hl(0, "NeopiSession", { fg = "#7aa2f7", default = true })
 end
 
 local function line_is_valid(bufnr, line)
@@ -40,6 +41,7 @@ function Indicator:update_number_highlights(hl_group)
   for line = start_line, end_line do
     local extmark = vim.api.nvim_buf_set_extmark(self.bufnr, ns, line, 0, {
       number_hl_group = hl_group,
+      priority = 100,
     })
     table.insert(self.number_extmarks, extmark)
   end

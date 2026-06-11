@@ -25,6 +25,7 @@ local defaults = {
     permissions = "approve-all",
     session = nil,
     refresh_buffers_on_done = true,
+    resume_by_region = true,
   },
   notifications = {
     enabled = true,
@@ -43,11 +44,17 @@ local defaults = {
       running = "NeopiRunning",
       success = "NeopiSuccess",
       error = "NeopiError",
+      session = "NeopiSession",
     },
   },
 }
 
 M.config = vim.deepcopy(defaults)
+
+local region_ns = vim.api.nvim_create_namespace("neopi_session_regions")
+local state = {
+  session_regions = {},
+}
 
 local function merge_config(config)
   M.config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), config or {})
@@ -90,6 +97,83 @@ local function indicator_range(opts)
 
   local line = vim.api.nvim_win_get_cursor(0)[1] - 1
   return line, line
+end
+
+local function selected_range(opts)
+  return indicator_range(opts)
+end
+
+local function range_overlaps(a_start, a_end, b_start, b_end)
+  return a_start <= b_end and b_start <= a_end
+end
+
+local function get_region_range(bufnr, region)
+  local positions = {}
+  for _, extmark in ipairs(region.extmarks or {}) do
+    local pos = vim.api.nvim_buf_get_extmark_by_id(bufnr, region_ns, extmark, {})
+    if pos and pos[1] then
+      table.insert(positions, pos[1])
+    end
+  end
+
+  if #positions == 0 then
+    return nil, nil
+  end
+
+  table.sort(positions)
+  return positions[1], positions[#positions]
+end
+
+local function find_overlapping_session_region(bufnr, start_line, end_line)
+  local regions = state.session_regions[bufnr] or {}
+  local best_region = nil
+  local best_score = -1
+  local live_regions = {}
+
+  for _, region in ipairs(regions) do
+    local region_start, region_end = get_region_range(bufnr, region)
+    if region_start and region_end then
+      table.insert(live_regions, region)
+      if range_overlaps(start_line, end_line, region_start, region_end) then
+        local score = math.min(end_line, region_end) - math.max(start_line, region_start)
+        if score > best_score then
+          best_score = score
+          best_region = region
+        end
+      end
+    end
+  end
+
+  state.session_regions[bufnr] = live_regions
+  return best_region
+end
+
+local function attach_session_region(bufnr, start_line, end_line, session_id)
+  local cfg = M.config.indicators or {}
+  if cfg.number_highlight == false or not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  local regions = state.session_regions[bufnr] or {}
+  local extmarks = {}
+  local hl_group = (cfg.highlights and cfg.highlights.session) or "NeopiSession"
+  local last_line = vim.api.nvim_buf_line_count(bufnr) - 1
+
+  for line = math.max(0, start_line), math.min(last_line, end_line) do
+    local extmark = vim.api.nvim_buf_set_extmark(bufnr, region_ns, line, 0, {
+      number_hl_group = hl_group,
+      priority = 10,
+    })
+    table.insert(extmarks, extmark)
+  end
+
+  table.insert(regions, {
+    session = session_id,
+    extmarks = extmarks,
+    cwd = vim.fn.getcwd(),
+    file = vim.api.nvim_buf_get_name(bufnr),
+  })
+  state.session_regions[bufnr] = regions
 end
 
 local function start_indicator(opts, message)
@@ -217,7 +301,15 @@ function M.pi(opts)
       return
     end
 
-    local indicator = start_indicator(opts, "Pi running via acpx...")
+    local bufnr = vim.api.nvim_get_current_buf()
+    local start_line, end_line = selected_range(opts)
+    local existing_region
+    if M.config.acpx.resume_by_region ~= false then
+      existing_region = find_overlapping_session_region(bufnr, start_line, end_line)
+    end
+
+    local indicator_message = existing_region and "Pi resuming via acpx..." or "Pi running via acpx..."
+    local indicator = start_indicator(opts, indicator_message)
     local running_notification
     local session, session_err = backend.send(prompt, M.config, {
       on_done = function(result)
@@ -244,7 +336,10 @@ function M.pi(opts)
           running_notification:finish("✗ Pi acpx session failed: " .. result.id, vim.log.levels.ERROR, "DiagnosticError", M.config.notifications.error_ttl_ms)
         end
       end,
-    })
+    }, existing_region and {
+      session = existing_region.session,
+      create_session = false,
+    } or {})
     if not session then
       if indicator then
         indicator:done("✗ Failed to start Pi", "DiagnosticError", M.config.indicators.error_ttl_ms, M.config.indicators.highlights.error)
@@ -253,8 +348,13 @@ function M.pi(opts)
       return
     end
 
+    if not existing_region and M.config.acpx.resume_by_region ~= false then
+      attach_session_region(bufnr, start_line, end_line, session.id)
+    end
+
     if M.config.notifications.enabled ~= false and M.config.notifications.acpx_running ~= false then
-      running_notification = notify.start("Pi acpx session running: " .. session.id, vim.log.levels.INFO, "DiagnosticInfo", {
+      local message = existing_region and "Pi acpx session resumed: " or "Pi acpx session running: "
+      running_notification = notify.start(message .. session.id, vim.log.levels.INFO, "DiagnosticInfo", {
         backend = "acpx",
         session = session.id,
       })
