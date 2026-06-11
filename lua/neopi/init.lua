@@ -1,6 +1,7 @@
 local M = {}
 
 local indicators = require("neopi.indicators")
+local notify = require("neopi.notify")
 
 local defaults = {
   backend = "tmux",
@@ -24,6 +25,12 @@ local defaults = {
     permissions = "approve-all",
     session = nil,
     refresh_buffers_on_done = true,
+  },
+  notifications = {
+    enabled = true,
+    acpx_running = true,
+    done_ttl_ms = 5000,
+    error_ttl_ms = 8000,
   },
   indicators = {
     enabled = true,
@@ -211,6 +218,7 @@ function M.pi(opts)
     end
 
     local indicator = start_indicator(opts, "Pi running via acpx...")
+    local running_notification
     local session, session_err = backend.send(prompt, M.config, {
       on_done = function(result)
         if M.config.acpx.refresh_buffers_on_done ~= false then
@@ -222,10 +230,18 @@ function M.pi(opts)
         if indicator then
           indicator:done("✓ Pi done " .. result.id, "DiagnosticOk", M.config.indicators.success_ttl_ms, M.config.indicators.highlights.success)
         end
+
+        if running_notification then
+          running_notification:finish("✓ Pi acpx session done: " .. result.id, vim.log.levels.INFO, "DiagnosticOk", M.config.notifications.done_ttl_ms)
+        end
       end,
       on_error = function(result)
         if indicator then
           indicator:done("✗ Pi failed " .. result.id, "DiagnosticError", M.config.indicators.error_ttl_ms, M.config.indicators.highlights.error)
+        end
+
+        if running_notification then
+          running_notification:finish("✗ Pi acpx session failed: " .. result.id, vim.log.levels.ERROR, "DiagnosticError", M.config.notifications.error_ttl_ms)
         end
       end,
     })
@@ -235,6 +251,13 @@ function M.pi(opts)
       end
       vim.notify(session_err or "Failed to start acpx session", vim.log.levels.ERROR)
       return
+    end
+
+    if M.config.notifications.enabled ~= false and M.config.notifications.acpx_running ~= false then
+      running_notification = notify.start("Pi acpx session running: " .. session.id, vim.log.levels.INFO, "DiagnosticInfo", {
+        backend = "acpx",
+        session = session.id,
+      })
     end
 
     vim.notify("Started Pi acpx session " .. session.id, vim.log.levels.INFO)

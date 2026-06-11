@@ -47,6 +47,20 @@ For local development, you can point lazy.nvim at a local checkout:
 
 The plugin also defines `:Pi` automatically when loaded, so calling `setup()` is optional unless you want to override defaults.
 
+If you use `mini.notify`, load it before Neopi and set it up normally:
+
+```lua
+{
+  "nvim-mini/mini.notify",
+  version = false,
+  config = function()
+    require("mini.notify").setup()
+  end,
+}
+```
+
+Neopi will use `MiniNotify.add/update/remove` for persistent acpx running notifications when available, and will fall back to `vim.notify` otherwise.
+
 ## Requirements
 
 Neopi assumes the following environment:
@@ -59,6 +73,10 @@ Neopi assumes the following environment:
 Optional for headless sessions:
 
 - `acpx` installed and available as `acpx`
+
+Optional for richer notifications:
+
+- [`mini.notify`](https://github.com/nvim-mini/mini.notify)
 
 Neopi defaults to the tmux backend. The optional acpx backend is for headless, programmatic Pi sessions.
 
@@ -224,6 +242,8 @@ local function greet(name)        ✓ Pi done neopi-123
 
 This distinction matters because interactive Pi panes remain open for follow-up conversation, so Neopi cannot reliably know when the agent is truly "done" in tmux mode.
 
+When `mini.notify` is available, acpx sessions also get a persistent notification while running. This is useful when jumping between files because the running session remains visible outside the original buffer.
+
 ## Configuration
 
 Potential setup:
@@ -251,6 +271,12 @@ require("neopi").setup({
     permissions = "approve-all",
     session = nil,
     refresh_buffers_on_done = true,
+  },
+  notifications = {
+    enabled = true,
+    acpx_running = true,
+    done_ttl_ms = 5000,
+    error_ttl_ms = 8000,
   },
   indicators = {
     enabled = true,
