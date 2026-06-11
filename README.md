@@ -238,6 +238,12 @@ local function greet(name)        ✓ Pi done neopi-123
 
 After a new acpx session is created for a selected range, Neopi keeps a subtle line-number highlight on that range. If you later select an overlapping range and run `:Pi <follow-up>`, Neopi resumes the existing acpx session automatically.
 
+When your cursor is on a range with an attached session, Neopi also shows a lightweight hint:
+
+```text
+local function greet(name)        Pi session exists — :Pi will resume it (neopi-123)
+```
+
 This paragraph-to-session mapping is currently local to the running Neovim instance. If you restart Neovim, the visual mapping is lost, but the underlying acpx sessions still exist.
 
 This distinction matters because interactive Pi panes remain open for follow-up conversation, so Neopi cannot reliably know when the agent is truly "done" in tmux mode.
@@ -278,6 +284,10 @@ require("neopi").setup({
     acpx_running = true,
     done_ttl_ms = 5000,
     error_ttl_ms = 8000,
+  },
+  session_hints = {
+    enabled = true,
+    message = "Pi session exists — :Pi will resume it",
   },
   indicators = {
     enabled = true,

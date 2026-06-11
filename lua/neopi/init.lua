@@ -33,6 +33,10 @@ local defaults = {
     done_ttl_ms = 5000,
     error_ttl_ms = 8000,
   },
+  session_hints = {
+    enabled = true,
+    message = "Pi session exists — :Pi will resume it",
+  },
   indicators = {
     enabled = true,
     spinner = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" },
@@ -52,8 +56,10 @@ local defaults = {
 M.config = vim.deepcopy(defaults)
 
 local region_ns = vim.api.nvim_create_namespace("neopi_session_regions")
+local hint_ns = vim.api.nvim_create_namespace("neopi_session_hints")
 local state = {
   session_regions = {},
+  hint_extmarks = {},
 }
 
 local function merge_config(config)
@@ -146,6 +152,46 @@ local function find_overlapping_session_region(bufnr, start_line, end_line)
 
   state.session_regions[bufnr] = live_regions
   return best_region
+end
+
+local function find_session_region_at_line(bufnr, line)
+  return find_overlapping_session_region(bufnr, line, line)
+end
+
+local function clear_session_hint(bufnr)
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  local extmark = state.hint_extmarks[bufnr]
+  if extmark then
+    pcall(vim.api.nvim_buf_del_extmark, bufnr, hint_ns, extmark)
+    state.hint_extmarks[bufnr] = nil
+  end
+end
+
+local function update_session_hint()
+  local cfg = M.config.session_hints or {}
+  local bufnr = vim.api.nvim_get_current_buf()
+
+  clear_session_hint(bufnr)
+
+  if cfg.enabled == false or M.config.acpx.resume_by_region == false then
+    return
+  end
+
+  local line = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local region = find_session_region_at_line(bufnr, line)
+  if not region then
+    return
+  end
+
+  local hl_group = (M.config.indicators.highlights and M.config.indicators.highlights.session) or "NeopiSession"
+  local message = cfg.message or "Pi session exists — :Pi will resume it"
+  state.hint_extmarks[bufnr] = vim.api.nvim_buf_set_extmark(bufnr, hint_ns, line, 0, {
+    virt_text = { { message .. " (" .. region.session .. ")", hl_group } },
+    virt_text_pos = "eol",
+  })
 end
 
 local function attach_session_region(bufnr, start_line, end_line, session_id)
@@ -302,6 +348,7 @@ function M.pi(opts)
     end
 
     local bufnr = vim.api.nvim_get_current_buf()
+    clear_session_hint(bufnr)
     local start_line, end_line = selected_range(opts)
     local existing_region
     if M.config.acpx.resume_by_region ~= false then
@@ -376,6 +423,12 @@ function M.setup(config)
     nargs = "*",
     range = true,
     desc = "Send selection and prompt to Pi",
+  })
+
+  local group = vim.api.nvim_create_augroup("neopi_session_hints", { clear = true })
+  vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "BufEnter" }, {
+    group = group,
+    callback = update_session_hint,
   })
 end
 
