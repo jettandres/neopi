@@ -4,7 +4,7 @@ Neopi is a small Neovim plugin that sends code and prompts from your editor to t
 
 The goal is to keep Neovim as your main coding surface while Pi works asynchronously in the background through acpx.
 
-> Status: planning / early prototype
+> Status: early prototype
 
 ## Why Neopi?
 
@@ -14,10 +14,10 @@ Neopi lets you:
 
 - visually select code in Neovim
 - run a command like `:Pi refactor this function`
-- open an interactive Pi session in a tmux pane with the selected code and useful context
-- keep editing while Pi runs independently
-- switch to the Pi pane whenever you want visibility or follow-up conversation
-- launch multiple Pi tasks in parallel tmux panes
+- send the selected code plus useful context to Pi through acpx
+- keep editing while Pi works asynchronously in the background
+- see inline progress and completion status in Neovim
+- resume follow-up prompts for code ranges that already have Pi sessions
 
 ## Installation
 
@@ -69,7 +69,7 @@ Neopi assumes the following environment:
 - Pi coding agent installed and available as `pi`
 - `acpx` installed and available as [acpx](https://github.com/openclaw/acpx)
 
-Optional for interactive tmux sessions:
+Optional for the experimental interactive tmux backend:
 
 - tmux
 - you are already inside a tmux session
@@ -78,7 +78,7 @@ Optional for richer notifications:
 
 - [`mini.notify`](https://github.com/nvim-mini/mini.notify)
 
-Neopi defaults to the acpx backend for headless, programmatic Pi sessions. The tmux backend is still available for visible interactive Pi panes.
+Neopi defaults to the acpx backend for headless, programmatic Pi sessions. The tmux backend is experimental and still available for visible interactive Pi panes.
 
 ## Example workflow
 
@@ -114,9 +114,9 @@ Neopi will:
 
 Pi then runs asynchronously while you continue editing.
 
-## tmux backend layout behavior
+## Experimental tmux backend layout behavior
 
-When using `backend = "tmux"`, the first `:Pi` invocation creates a vertical split on the right side of the current tmux window:
+When using the experimental `backend = "tmux"`, the first `:Pi` invocation creates a vertical split on the right side of the current tmux window:
 
 ```text
 +-----------------------------+---------------------+
@@ -206,9 +206,9 @@ require("neopi").setup({
 })
 ```
 
-### tmux backend
+### tmux backend experimental
 
-The tmux backend launches normal interactive Pi sessions inside tmux panes. This keeps the agent visible and gives you a place to continue the conversation after the initial prompt.
+The experimental tmux backend launches normal interactive Pi sessions inside tmux panes. This keeps the agent visible and gives you a place to continue the conversation after the initial prompt.
 
 ```lua
 require("neopi").setup({
@@ -306,27 +306,6 @@ require("neopi").setup({
 })
 ```
 
-## Initial implementation scope
+## Notes
 
-The first version should focus on:
-
-- defining `:Pi {prompt}`
-- using acpx as the default backend
-- supporting visual selections
-- sending selected code plus minimal file/project context to Pi
-- showing inline status and refreshing buffers after acpx completion
-- attaching acpx sessions to selected regions for local follow-up prompts
-- preserving the tmux backend for interactive Pi panes
-
-Out of scope for the first version:
-
-- applying edits back into Neovim automatically
-- parsing Pi output
-- managing Pi sessions from Neovim
-- non-tmux terminal support
-- full headless result rendering in Neovim
-- acpx session management commands such as history, status, cancel, and follow-up
-
-## Project status
-
-Neopi is currently being designed. The README is the source of truth for the intended UX before implementation begins.
+Neopi's paragraph-to-session mapping is currently local to the running Neovim instance. If you restart Neovim, visual region mappings are lost, but the underlying acpx sessions still exist.
