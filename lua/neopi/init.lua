@@ -304,6 +304,48 @@ local function build_prompt(user_prompt, opts)
   return table.concat(out, "\n")
 end
 
+local function is_file_buffer(bufnr)
+  return bufnr
+    and vim.api.nvim_buf_is_valid(bufnr)
+    and vim.api.nvim_buf_is_loaded(bufnr)
+    and vim.bo[bufnr].buftype == ""
+    and vim.api.nvim_buf_get_name(bufnr) ~= ""
+end
+
+local function refresh_changed_buffers()
+  local conflicts = {}
+
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if is_file_buffer(bufnr) then
+      if vim.bo[bufnr].modified then
+        -- `checktime` refuses to reload a buffer with unsaved changes, so use
+        -- its (captured) warning to detect that Pi changed the file and warn
+        -- the user instead of letting a later :w silently overwrite Pi's work.
+        local ok, res = pcall(vim.api.nvim_exec2, "silent! checktime " .. bufnr, { output = true })
+        local output = (ok and res and res.output) or ""
+        if output:find("has changed", 1, true) then
+          table.insert(conflicts, vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":."))
+        end
+      else
+        -- `checktime <buf>` targets a specific buffer, unlike a bare
+        -- `:checktime` which (when invoked from Lua) only refreshes the
+        -- current buffer. This lets Pi's edits show up even when you switched
+        -- away while it worked.
+        pcall(vim.cmd, "silent! checktime " .. bufnr)
+      end
+    end
+  end
+
+  if #conflicts > 0 then
+    vim.notify(
+      "neopi: Pi changed "
+        .. table.concat(conflicts, ", ")
+        .. " on disk, but the buffer has unsaved changes. Your changes were kept; run :edit! to load Pi's version.",
+      vim.log.levels.WARN
+    )
+  end
+end
+
 function M.pi(opts)
   opts = opts or {}
 
@@ -361,9 +403,7 @@ function M.pi(opts)
     local session, session_err = backend.send(prompt, M.config, {
       on_done = function(result)
         if M.config.acpx.refresh_buffers_on_done ~= false then
-          vim.schedule(function()
-            vim.cmd("silent! checktime")
-          end)
+          vim.schedule(refresh_changed_buffers)
         end
 
         if indicator then
@@ -375,6 +415,11 @@ function M.pi(opts)
         end
       end,
       on_error = function(result)
+        -- A failed run may still have written some files before erroring out.
+        if M.config.acpx.refresh_buffers_on_done ~= false then
+          vim.schedule(refresh_changed_buffers)
+        end
+
         if indicator then
           indicator:done("✗ Pi failed " .. result.id, "DiagnosticError", M.config.indicators.error_ttl_ms, M.config.indicators.highlights.error)
         end
