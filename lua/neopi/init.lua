@@ -51,6 +51,10 @@ local defaults = {
       session = "NeopiSession",
     },
   },
+  view = {
+    split = "vsplit",
+    show_thinking = true,
+  },
 }
 
 M.config = vim.deepcopy(defaults)
@@ -346,6 +350,8 @@ local function refresh_changed_buffers()
   end
 end
 
+M.refresh_changed_buffers = refresh_changed_buffers
+
 function M.pi(opts)
   opts = opts or {}
 
@@ -468,6 +474,42 @@ function M.setup(config)
     nargs = "*",
     range = true,
     desc = "Send selection and prompt to Pi",
+  })
+
+  pcall(vim.api.nvim_del_user_command, "PiView")
+  vim.api.nvim_create_user_command("PiView", function(opts)
+    local name = vim.trim(opts.args or "")
+    local session
+    local ctx
+
+    if name ~= "" then
+      session = name
+      ctx = { cwd = vim.fn.getcwd(), file = vim.api.nvim_buf_get_name(0) }
+    else
+      local bufnr = vim.api.nvim_get_current_buf()
+      local line = vim.api.nvim_win_get_cursor(0)[1] - 1
+      local region = find_session_region_at_line(bufnr, line)
+      if not region then
+        vim.notify(
+          "Neopi: no Pi session at cursor (move to a highlighted region or pass a session id)",
+          vim.log.levels.WARN
+        )
+        return
+      end
+
+      session = region.session
+      ctx = { cwd = region.cwd, file = region.file }
+    end
+
+    require("neopi.view").open({
+      session = session,
+      cwd = ctx.cwd,
+      file = ctx.file,
+      config = M.config,
+    })
+  end, {
+    nargs = "?",
+    desc = "Open a Neopi acpx session view",
   })
 
   local group = vim.api.nvim_create_augroup("neopi_session_hints", { clear = true })
