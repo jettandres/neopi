@@ -41,6 +41,18 @@ local function permission_flag(permissions)
   return nil
 end
 
+-- pi-acp spawns the `pi` binary from PATH. Forward Neopi's configured pi_command
+-- so that acpx uses the same Pi installation (and therefore the same default
+-- model from Pi's own settings) instead of whatever `pi` resolves to on PATH.
+local function job_env(config)
+  local pi_command = config.pi_command
+  if not pi_command or pi_command == "" then
+    return nil
+  end
+
+  return { PI_ACP_PI_COMMAND = pi_command }
+end
+
 function M.ensure_available(config)
   local command = (config.acpx and config.acpx.command) or "acpx"
   if vim.fn.executable(command) ~= 1 then
@@ -101,6 +113,7 @@ function M.send(prompt, config, callbacks, opts)
   local function start_prompt_job()
     local job_id = vim.fn.jobstart(prompt_args, {
       cwd = cwd,
+      env = job_env(config),
       stdout_buffered = true,
       stderr_buffered = true,
       on_stdout = function(_, data)
@@ -156,6 +169,7 @@ function M.send(prompt, config, callbacks, opts)
 
   local new_job = vim.fn.jobstart(new_args, {
     cwd = cwd,
+    env = job_env(config),
     stdout_buffered = true,
     stderr_buffered = true,
     on_exit = function(_, code)
