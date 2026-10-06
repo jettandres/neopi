@@ -20,6 +20,7 @@ Neopi lets you:
 - keep editing while Pi works asynchronously in the background
 - see inline progress and completion status in Neovim
 - resume follow-up prompts for code ranges that already have Pi sessions
+- open a session transcript with `:PiView` to review thinking, tool calls, and stream follow-up prompts
 
 ## Installation
 
@@ -160,6 +161,15 @@ Example:
 
 If no visual range is provided, Neopi may send the current file or cursor context depending on configuration.
 
+### `:PiView [session]`
+
+Open a transcript for an existing acpx session.
+
+- With no argument, it uses the session attached to the region under the cursor (the same mapping used by `:Pi` follow-ups).
+- With an argument, it opens that acpx session by name, for example `:PiView neopi-123456-1234`.
+
+See [Session view](#session-view) below.
+
 ## Prompt sent to Pi
 
 Neopi builds a structured prompt before starting Pi.
@@ -194,6 +204,8 @@ This keeps the user's prompt short while still giving Pi enough context to act u
 Neopi's default backend uses acpx for headless Pi sessions.
 
 Instead of opening an interactive tmux pane, Neopi creates an acpx session and sends the generated prompt to Pi through acpx. This is better for progress indicators, completion tracking, cancellation, structured output, and refreshing buffers after edits. Follow-up happens through Neopi/acpx rather than by typing directly into a visible Pi pane.
+
+Neopi forwards its `pi_command` to the ACP adapter through `PI_ACP_PI_COMMAND`, so the acpx backend uses the same Pi installation (and therefore the same default model from Pi's own settings) as the tmux backend, rather than whichever `pi` happens to be first on `PATH`.
 
 ```lua
 require("neopi").setup({
@@ -252,6 +264,43 @@ This distinction matters because interactive Pi panes remain open for follow-up 
 
 When `mini.notify` is available, acpx sessions also get a persistent notification while running. This is useful when jumping between files because the running session remains visible outside the original buffer.
 
+## Session view
+
+`:PiView` opens a split with a readable transcript of an acpx session: your prompts, Pi's replies, its thinking, and a compact list of tool calls. It is powered entirely by acpx/ACP, so it is not Pi-specific.
+
+Two things populate the view:
+
+- **Replay**: the stored acpx event log (`~/.acpx/sessions/<id>.stream.ndjson`) is rendered when the view opens.
+- **Live**: prompts sent from the view stream back as they happen (`--format json`), including thinking when the adapter emits it.
+
+While the view is focused:
+
+| Key   | Action                                          |
+| ----- | ----------------------------------------------- |
+| `i`   | Prompt the session (opens an input line)        |
+| `t`   | Toggle thinking blocks on/off                   |
+| `R`   | Reload the transcript from the stored event log |
+| `c`   | Cancel the running turn                         |
+| `o`   | Open the session's source file                  |
+| `q`   | Close the view                                  |
+
+Sends reuse the same acpx session, so acpx queues them when a turn is already running and the view shows the queue depth in its status line. When a run finishes, changed buffers are refreshed just like `:Pi`.
+
+```lua
+require("neopi").setup({
+  view = {
+    split = "vsplit", -- "vsplit" (right) or "split" (below)
+    show_thinking = true,
+  },
+})
+```
+
+> **Thinking** is an ACP `agent_thought_chunk`. Not every agent emits it. The Pi ACP adapter (`pi-acp`) only emits thinking from **0.0.34** onward; older versions — including the `pi-acp@^0.0.22` some acpx releases resolve to — stream the answer but no thinking. If you use the Pi adapter and want thinking, install `pi-acp@latest` and point acpx at it, for example in `~/.acpx/config.json`:
+>
+> ```json
+> { "agents": { "pi": { "command": "pi-acp" } } }
+> ```
+
 ## Configuration
 
 Potential setup:
@@ -280,6 +329,10 @@ require("neopi").setup({
     session = nil,
     refresh_buffers_on_done = true,
     resume_by_region = true,
+  },
+  view = {
+    split = "vsplit",
+    show_thinking = true,
   },
   notifications = {
     enabled = true,
