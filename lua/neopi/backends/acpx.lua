@@ -197,4 +197,136 @@ function M.send(prompt, config, callbacks, opts)
   return result, nil
 end
 
+-- Like M.send, but forces `--format json` and streams parsed JSON-RPC events to
+-- callbacks.on_event as they arrive. Used by the session view.
+function M.send_stream(prompt, config, callbacks, opts)
+  callbacks = callbacks or {}
+  opts = opts or {}
+  local acpx_cfg = config.acpx or {}
+  local command = acpx_cfg.command or "acpx"
+  local agent = acpx_cfg.agent or "pi"
+  local permissions = acpx_cfg.permissions or "approve-all"
+  local cwd = opts.cwd or vim.fn.getcwd()
+  local session = opts.session or acpx_cfg.session or new_session_name()
+
+  local prompt_file, err = write_prompt_file(prompt)
+  if not prompt_file then
+    return nil, err
+  end
+
+  local result = {
+    id = session,
+    kind = "acpx_stream",
+    output = {},
+    errors = {},
+  }
+
+  local args = {
+    command,
+    "--cwd",
+    cwd,
+    "--format",
+    "json",
+  }
+
+  local permissions_arg = permission_flag(permissions)
+  if permissions_arg then
+    table.insert(args, permissions_arg)
+  end
+
+  vim.list_extend(args, {
+    agent,
+    "-s",
+    session,
+    "--file",
+    prompt_file,
+  })
+
+  local pending = ""
+
+  local function dispatch(line)
+    if line == "" then
+      return
+    end
+
+    local ok, msg = pcall(vim.json.decode, line)
+    if ok and callbacks.on_event then
+      callbacks.on_event(msg)
+    end
+  end
+
+  local job_id = vim.fn.jobstart(args, {
+    cwd = cwd,
+    env = job_env(config),
+    stdout_buffered = false,
+    stderr_buffered = true,
+    on_stdout = function(_, data)
+      if not data then
+        return
+      end
+
+      for i, piece in ipairs(data) do
+        if i == #data then
+          pending = pending .. piece
+        else
+          dispatch(pending .. piece)
+          pending = ""
+        end
+      end
+    end,
+    on_stderr = function(_, data)
+      append_data(result.errors, data)
+    end,
+    on_exit = function(_, code)
+      if pending ~= "" then
+        dispatch(pending)
+        pending = ""
+      end
+
+      vim.fn.delete(prompt_file)
+      if code == 0 then
+        if callbacks.on_done then
+          callbacks.on_done(result)
+        end
+      else
+        if callbacks.on_error then
+          callbacks.on_error(result)
+        end
+      end
+    end,
+  })
+
+  if job_id <= 0 then
+    vim.fn.delete(prompt_file)
+    return nil, "Failed to start acpx stream job"
+  end
+
+  result.job_id = job_id
+  return result, nil
+end
+
+function M.cancel(config, session, cwd)
+  local acpx_cfg = config.acpx or {}
+  local command = acpx_cfg.command or "acpx"
+  local agent = acpx_cfg.agent or "pi"
+  cwd = cwd or vim.fn.getcwd()
+
+  local args = {
+    command,
+    "--cwd",
+    cwd,
+    agent,
+    "cancel",
+    "-s",
+    session,
+  }
+
+  return vim.fn.jobstart(args, {
+    cwd = cwd,
+    env = job_env(config),
+    stdout_buffered = true,
+    stderr_buffered = true,
+  })
+end
+
 return M
